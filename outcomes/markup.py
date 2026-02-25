@@ -111,7 +111,7 @@ def compute_markup_decomposition(df: pl.LazyFrame) -> pl.DataFrame:
     # Join all horizons
     out = results[0]
     for r in results[1:]:
-        out = out.join(r, on=[COUNTRY_COL, INDUSTRY_COL], how="outer")
+        out = out.join(r, on=[COUNTRY_COL, INDUSTRY_COL], how="left")
 
     # Rename to match IV pipeline convention
     out = out.rename({

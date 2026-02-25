@@ -81,7 +81,7 @@ def compute_op_covariance(df: pl.LazyFrame) -> pl.DataFrame:
 
     out = results[0]
     for r in results[1:]:
-        out = out.join(r, on=[COUNTRY_COL, INDUSTRY_COL], how="outer")
+        out = out.join(r, on=[COUNTRY_COL, INDUSTRY_COL], how="left")
 
     out = out.rename({
         COUNTRY_COL: "fic_code",

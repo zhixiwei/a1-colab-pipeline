@@ -47,7 +47,7 @@ def _compute_concentration_by_year(df: pl.LazyFrame) -> pl.LazyFrame:
         .agg(pl.col(FIRM_COL).n_unique().alias("n_firms"))
     )
 
-    return cr4.join(n_firms, on=[COUNTRY_COL, INDUSTRY_COL, YEAR_COL], how="outer")
+    return cr4.join(n_firms, on=[COUNTRY_COL, INDUSTRY_COL, YEAR_COL], how="left")
 
 
 def _compute_turbulence(df: pl.LazyFrame) -> pl.DataFrame:
@@ -88,7 +88,7 @@ def _compute_turbulence(df: pl.LazyFrame) -> pl.DataFrame:
 
     out = results[0]
     for r in results[1:]:
-        out = out.join(r, on=[COUNTRY_COL, INDUSTRY_COL], how="outer")
+        out = out.join(r, on=[COUNTRY_COL, INDUSTRY_COL], how="left")
     return out
 
 
@@ -134,12 +134,12 @@ def compute_concentration(df: pl.LazyFrame) -> pl.DataFrame:
 
     out = results[0]
     for r in results[1:]:
-        out = out.join(r, on=[COUNTRY_COL, INDUSTRY_COL], how="outer")
+        out = out.join(r, on=[COUNTRY_COL, INDUSTRY_COL], how="left")
 
     # Add turbulence
     turb = _compute_turbulence(df)
     if turb.height > 0:
-        out = out.join(turb, on=[COUNTRY_COL, INDUSTRY_COL], how="outer")
+        out = out.join(turb, on=[COUNTRY_COL, INDUSTRY_COL], how="left")
 
     out = out.rename({
         COUNTRY_COL: "fic_code",
