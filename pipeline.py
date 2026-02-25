@@ -3,10 +3,12 @@ Orchestrator: load cleaned Orbis parquets → compute outcome variables → save
 
 Usage on Colab:
     from pipeline import run_all
-    results = run_all()
+    results = run_all()              # full run
+    results = run_all(test=True)     # smoke test with one parquet
 """
 
 import os
+import glob
 import polars as pl
 from config import (
     MASTER_DIR, OUTPUT_DIR, FIRM_COL, YEAR_COL,
@@ -18,10 +20,22 @@ from outcomes.dispersion import compute_dispersion
 from outcomes.concentration import compute_concentration
 
 
-def load_data() -> pl.LazyFrame:
-    """Load all parquets from MASTER_DIR, derive country and SIC2."""
-    print(f"Loading parquets from {MASTER_DIR}/ ...")
-    df = pl.scan_parquet(os.path.join(MASTER_DIR, "*.parquet"))
+def load_data(test: bool = False) -> pl.LazyFrame:
+    """Load parquets from MASTER_DIR, derive country and SIC2.
+
+    If test=True, loads only the first parquet file (smoke test).
+    """
+    pattern = os.path.join(MASTER_DIR, "*.parquet")
+    files = sorted(glob.glob(pattern))
+    if not files:
+        raise FileNotFoundError(f"No parquet files found in {MASTER_DIR}/")
+
+    if test:
+        files = files[:1]
+        print(f"SMOKE TEST: loading only {os.path.basename(files[0])}")
+
+    print(f"Loading {len(files)} parquet file(s) from {MASTER_DIR}/ ...")
+    df = pl.scan_parquet(files)
 
     # Derive country from bvd_id[:2]
     df = df.with_columns(
@@ -38,13 +52,17 @@ def load_data() -> pl.LazyFrame:
     return df
 
 
-def run_all(save: bool = True) -> dict:
+def run_all(save: bool = True, test: bool = False) -> dict:
     """
     Run all outcome modules and save results.
 
+    Args:
+        save: Write output CSVs/parquets to OUTPUT_DIR.
+        test: If True, load only one parquet file (smoke test).
+
     Returns dict of outcome name → DataFrame for inspection.
     """
-    df = load_data()
+    df = load_data(test=test)
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     results = {}
