@@ -44,7 +44,7 @@ def _compute_concentration_by_year(df: pl.LazyFrame) -> pl.LazyFrame:
     n_firms = (
         base
         .group_by([COUNTRY_COL, INDUSTRY_COL, YEAR_COL])
-        .agg(pl.col(FIRM_COL).n_unique().alias("n_firms"))
+        .agg(pl.col(FIRM_COL).n_unique().cast(pl.Int64).alias("n_firms"))
     )
 
     return cr4.join(n_firms, on=[COUNTRY_COL, INDUSTRY_COL, YEAR_COL], how="left")
