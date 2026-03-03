@@ -14,6 +14,7 @@ import polars as pl
 from config import (
     FIRM_COL, YEAR_COL, COUNTRY_COL, INDUSTRY_COL,
     SALES_COL, EMPLOYEES_COL, TREATMENT_YEAR, HORIZONS,
+    PRESHOCK_BASE, BLOCK2_HORIZONS,
 )
 
 
@@ -73,6 +74,46 @@ def compute_op_covariance(df: pl.LazyFrame) -> pl.DataFrame:
                 (pl.col("opcov") - pl.col("opcov_base")).alias(f"LD_OPcov_2012_{h}")
             )
             .select([COUNTRY_COL, INDUSTRY_COL, f"LD_OPcov_2012_{h}"])
+        )
+        results.append(ld)
+
+    if not results:
+        return pl.DataFrame()
+
+    out = results[0]
+    for r in results[1:]:
+        out = out.join(r, on=[COUNTRY_COL, INDUSTRY_COL], how="left")
+
+    out = out.rename({
+        COUNTRY_COL: "fic_code",
+        INDUSTRY_COL: "borrower_sic",
+    })
+    return out
+
+
+def compute_op_covariance_block2(df: pl.LazyFrame) -> pl.DataFrame:
+    """
+    Compute long-difference OP covariance from PRESHOCK_BASE.
+
+    Returns columns: fic_code, borrower_sic,
+      LD_OPcov_2010_2013, LD_OPcov_2010_2014
+    """
+    opcov = _compute_opcov_by_year(df).collect()
+
+    base = opcov.filter(pl.col(YEAR_COL) == PRESHOCK_BASE).select([
+        COUNTRY_COL, INDUSTRY_COL,
+        pl.col("opcov").alias("opcov_base"),
+    ])
+
+    results = []
+    for h in BLOCK2_HORIZONS:
+        horizon = opcov.filter(pl.col(YEAR_COL) == h)
+        ld = (
+            base.join(horizon, on=[COUNTRY_COL, INDUSTRY_COL], how="inner")
+            .with_columns(
+                (pl.col("opcov") - pl.col("opcov_base")).alias(f"LD_OPcov_{PRESHOCK_BASE}_{h}")
+            )
+            .select([COUNTRY_COL, INDUSTRY_COL, f"LD_OPcov_{PRESHOCK_BASE}_{h}"])
         )
         results.append(ld)
 

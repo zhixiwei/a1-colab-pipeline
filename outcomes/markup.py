@@ -16,6 +16,7 @@ import polars as pl
 from config import (
     FIRM_COL, YEAR_COL, COUNTRY_COL, INDUSTRY_COL,
     SALES_COL, COGS_COL, TREATMENT_YEAR, HORIZONS,
+    PRESHOCK_BASE, BLOCK2_HORIZONS,
 )
 
 
@@ -114,6 +115,43 @@ def compute_markup_decomposition(df: pl.LazyFrame) -> pl.DataFrame:
         out = out.join(r, on=[COUNTRY_COL, INDUSTRY_COL], how="left")
 
     # Rename to match IV pipeline convention
+    out = out.rename({
+        COUNTRY_COL: "fic_code",
+        INDUSTRY_COL: "borrower_sic",
+    })
+    return out
+
+
+def compute_markup_decomposition_block2(df: pl.LazyFrame) -> pl.DataFrame:
+    """
+    Compute De Loecker decomposition from PRESHOCK_BASE to BLOCK2_HORIZONS.
+
+    Returns columns: fic_code, borrower_sic,
+      LD_Within_2010_2013, LD_Between_2010_2013, LD_Cross_2010_2013, ...
+    """
+    collected = df.collect()
+    base = collected.filter(pl.col(YEAR_COL) == PRESHOCK_BASE)
+
+    results = []
+    for h in BLOCK2_HORIZONS:
+        horizon_df = collected.filter(pl.col(YEAR_COL) == h)
+        decomp = _decompose_pair(base, horizon_df)
+        if decomp is None:
+            continue
+        decomp = decomp.rename({
+            "within":  f"LD_Within_{PRESHOCK_BASE}_{h}",
+            "between": f"LD_Between_{PRESHOCK_BASE}_{h}",
+            "cross":   f"LD_Cross_{PRESHOCK_BASE}_{h}",
+        })
+        results.append(decomp)
+
+    if not results:
+        return pl.DataFrame()
+
+    out = results[0]
+    for r in results[1:]:
+        out = out.join(r, on=[COUNTRY_COL, INDUSTRY_COL], how="left")
+
     out = out.rename({
         COUNTRY_COL: "fic_code",
         INDUSTRY_COL: "borrower_sic",

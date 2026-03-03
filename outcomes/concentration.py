@@ -12,6 +12,7 @@ import polars as pl
 from config import (
     FIRM_COL, YEAR_COL, COUNTRY_COL, INDUSTRY_COL,
     SALES_COL, TREATMENT_YEAR, HORIZONS,
+    PRESHOCK_BASE, BLOCK2_HORIZONS,
 )
 
 
@@ -145,4 +146,101 @@ def compute_concentration(df: pl.LazyFrame) -> pl.DataFrame:
         COUNTRY_COL: "fic_code",
         INDUSTRY_COL: "borrower_sic",
     })
+    return out
+
+
+def compute_concentration_block2(df: pl.LazyFrame) -> pl.DataFrame:
+    """
+    Compute long-difference CR4, n_firms, and turbulence from PRESHOCK_BASE.
+
+    Returns columns: fic_code, borrower_sic,
+      LD_CR4_2010_2013, LD_CR4_2010_2014,
+      LD_n_firms_2010_2013, ..., LD_turbulence_2010_2013, ...
+    """
+    conc = _compute_concentration_by_year(df).collect()
+
+    base = (
+        conc.filter(pl.col(YEAR_COL) == PRESHOCK_BASE)
+        .select([
+            COUNTRY_COL, INDUSTRY_COL,
+            pl.col("cr4").alias("base_cr4"),
+            pl.col("n_firms").alias("base_n_firms"),
+        ])
+    )
+
+    results = []
+    for h in BLOCK2_HORIZONS:
+        horizon = conc.filter(pl.col(YEAR_COL) == h)
+        ld = (
+            base.join(horizon, on=[COUNTRY_COL, INDUSTRY_COL], how="inner")
+            .with_columns([
+                (pl.col("cr4") - pl.col("base_cr4")).alias(f"LD_CR4_{PRESHOCK_BASE}_{h}"),
+                (pl.col("n_firms") - pl.col("base_n_firms")).alias(f"LD_n_firms_{PRESHOCK_BASE}_{h}"),
+            ])
+            .select([
+                COUNTRY_COL, INDUSTRY_COL,
+                f"LD_CR4_{PRESHOCK_BASE}_{h}",
+                f"LD_n_firms_{PRESHOCK_BASE}_{h}",
+            ])
+        )
+        results.append(ld)
+
+    if not results:
+        return pl.DataFrame()
+
+    out = results[0]
+    for r in results[1:]:
+        out = out.join(r, on=[COUNTRY_COL, INDUSTRY_COL], how="left")
+
+    # Turbulence from 2010 base
+    turb = _compute_turbulence_block2(df)
+    if turb.height > 0:
+        out = out.join(turb, on=[COUNTRY_COL, INDUSTRY_COL], how="left")
+
+    out = out.rename({
+        COUNTRY_COL: "fic_code",
+        INDUSTRY_COL: "borrower_sic",
+    })
+    return out
+
+
+def _compute_turbulence_block2(df: pl.LazyFrame) -> pl.DataFrame:
+    """Compute turbulence from PRESHOCK_BASE to each BLOCK2_HORIZON."""
+    collected = (
+        df
+        .filter(pl.col(SALES_COL).is_not_null() & (pl.col(SALES_COL) > 0))
+        .with_columns(
+            (pl.col(SALES_COL) / pl.col(SALES_COL).sum().over([COUNTRY_COL, INDUSTRY_COL, YEAR_COL]))
+            .alias("share")
+        )
+        .collect()
+    )
+
+    results = []
+    for h in BLOCK2_HORIZONS:
+        base = collected.filter(pl.col(YEAR_COL) == PRESHOCK_BASE)
+        horizon = collected.filter(pl.col(YEAR_COL) == h)
+
+        merged = base.join(
+            horizon,
+            on=[FIRM_COL, COUNTRY_COL, INDUSTRY_COL],
+            suffix="_h",
+        )
+
+        turb = (
+            merged
+            .with_columns(
+                (pl.col("share_h") - pl.col("share")).abs().alias("abs_d_share")
+            )
+            .group_by([COUNTRY_COL, INDUSTRY_COL])
+            .agg(pl.col("abs_d_share").sum().alias(f"LD_turbulence_{PRESHOCK_BASE}_{h}"))
+        )
+        results.append(turb)
+
+    if not results:
+        return pl.DataFrame()
+
+    out = results[0]
+    for r in results[1:]:
+        out = out.join(r, on=[COUNTRY_COL, INDUSTRY_COL], how="left")
     return out

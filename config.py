@@ -11,6 +11,10 @@ PRESHOCK_YEARS = [2009, 2010]    # baseline for pre-shock averages
 TREATMENT_YEAR = 2012            # EBA treatment year
 HORIZONS = [2013, 2014, 2015]    # post-treatment windows
 
+# Block 2: pre-shock baseline for industry mediators
+PRESHOCK_BASE = 2010             # mediator base year (ΔM = M_horizon − M_2010)
+BLOCK2_HORIZONS = [2013, 2014]   # 2010→2013 and 2010→2014
+
 # Column names in the cleaned Orbis parquets
 INDUSTRY_COL = "sic"             # SIC-2 level
 COUNTRY_COL = "_country_"        # derived from bvd_id[:2]

@@ -14,10 +14,10 @@ from config import (
     MASTER_DIR, OUTPUT_DIR, FIRM_COL, YEAR_COL,
     COUNTRY_COL, INDUSTRY_COL, SALES_COL,
 )
-from outcomes.markup import compute_firm_markup, compute_markup_decomposition
-from outcomes.op_covariance import compute_op_covariance
-from outcomes.dispersion import compute_dispersion
-from outcomes.concentration import compute_concentration
+from outcomes.markup import compute_firm_markup, compute_markup_decomposition, compute_markup_decomposition_block2
+from outcomes.op_covariance import compute_op_covariance, compute_op_covariance_block2
+from outcomes.dispersion import compute_dispersion, compute_dispersion_block2
+from outcomes.concentration import compute_concentration, compute_concentration_block2
 
 
 def load_data(test: bool = False) -> pl.LazyFrame:
@@ -120,6 +120,70 @@ def run_all(save: bool = True, test: bool = False) -> dict:
         print(f"  Saved: {csv_path}")
 
     print(f"\nDone. All outputs saved to {OUTPUT_DIR}/")
+    return results
+
+
+def run_block2_mediators(save: bool = True, test: bool = False) -> dict:
+    """
+    Compute Block 2 industry mediators: long-differences from 2010 base.
+
+    Same outcome modules, but differenced from PRESHOCK_BASE (2010)
+    to BLOCK2_HORIZONS (2013, 2014).
+
+    Saves to {OUTPUT_DIR}/block2/ subfolder.
+    """
+    df = load_data(test=test)
+
+    block2_dir = os.path.join(OUTPUT_DIR, "block2")
+    os.makedirs(block2_dir, exist_ok=True)
+    results = {}
+
+    # 1. Markup decomposition (needs firm-level markup first)
+    print("\n[Block2 1/4] Computing markup decomposition (2010 base) ...")
+    df_markup = compute_firm_markup(df)
+    markup_b2 = compute_markup_decomposition_block2(df_markup)
+    results["markup_decomp"] = markup_b2
+    print(f"  → {markup_b2.height} industry-pairs")
+
+    if save:
+        csv_path = os.path.join(block2_dir, "industry_markup_decomp_2010base.csv")
+        markup_b2.write_csv(csv_path)
+        print(f"  Saved: {csv_path}")
+
+    # 2. OP covariance
+    print("\n[Block2 2/4] Computing OP covariance (2010 base) ...")
+    opcov_b2 = compute_op_covariance_block2(df)
+    results["op_covariance"] = opcov_b2
+    print(f"  → {opcov_b2.height} industry-pairs")
+
+    if save:
+        csv_path = os.path.join(block2_dir, "industry_op_covariance_2010base.csv")
+        opcov_b2.write_csv(csv_path)
+        print(f"  Saved: {csv_path}")
+
+    # 3. Dispersion
+    print("\n[Block2 3/4] Computing dispersion (2010 base) ...")
+    disp_b2 = compute_dispersion_block2(df)
+    results["dispersion"] = disp_b2
+    print(f"  → {disp_b2.height} industry-pairs")
+
+    if save:
+        csv_path = os.path.join(block2_dir, "industry_dispersion_2010base.csv")
+        disp_b2.write_csv(csv_path)
+        print(f"  Saved: {csv_path}")
+
+    # 4. Concentration & turbulence
+    print("\n[Block2 4/4] Computing CR4, n_firms, turbulence (2010 base) ...")
+    conc_b2 = compute_concentration_block2(df)
+    results["concentration"] = conc_b2
+    print(f"  → {conc_b2.height} industry-pairs")
+
+    if save:
+        csv_path = os.path.join(block2_dir, "industry_concentration_2010base.csv")
+        conc_b2.write_csv(csv_path)
+        print(f"  Saved: {csv_path}")
+
+    print(f"\nBlock 2 mediators done. Saved to {block2_dir}/")
     return results
 
 
